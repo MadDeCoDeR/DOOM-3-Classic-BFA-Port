@@ -1,0 +1,30 @@
+{
+  "name": "doombfa",
+  "version": "1.2.9",
+  "dependencies": [
+    "zlib",
+    "libpng",
+    "libjpeg-turbo",
+    "openal-soft",
+    {
+      "name": "glew",
+      "platform": "!linux"
+    },
+    "rapidjson",
+    {
+      "name": "xaudio2redist",
+      "platform": "windows & !staticcrt"
+    },
+    {
+      "name": "sdl2",
+      "default-features": false,
+      "features": [
+        "ibus",
+        "x11",
+        "wayland"
+      ],
+      "platform": "linux"
+    },
+    "ffmpeg"
+  ]
+}
