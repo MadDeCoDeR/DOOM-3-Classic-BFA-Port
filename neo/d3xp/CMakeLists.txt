@@ -193,6 +193,7 @@ if(MSVC)
 		idlib)
 else()
 	add_compile_options(-fPIC)
+	add_compile_options(-ldl)
 	if(USE_PRECOMPILED_HEADERS) 	
 		set(GAME_PRECOMPILED_SOURCES ${ID_SOURCE_ALL})
 

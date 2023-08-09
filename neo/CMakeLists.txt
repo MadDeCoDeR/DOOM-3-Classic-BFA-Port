@@ -33,8 +33,8 @@ option(USE_VULKAN
 option(ONATIVE
 		"Optimize for the host CPU" OFF)
 		
-option(WINRT
-		"Build for Windows RT" OFF)
+option(USE_SYSTEM_DX
+		"Build using the System's DirectX and NOT the DirectX of June 2010" OFF)
 		
 option(WINDOWS10
 		"Build for Windows 10" OFF)
@@ -106,18 +106,8 @@ endif()
 if(MSVC)
 	if(USE_XAUDIO2_PACKAGE)
 		set(USE_XAUDIO2 TRUE)
+		set(USE_SYSTEM_DX TRUE)
 	endif()
-	#message(STATUS CMAKE_ROOT: ${CMAKE_ROOT})
-	
-	#if(CMAKE_CL_64)
-	#	SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/../bin/win64)
-	#else()
-	#	SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/../bin/win32)
-	#endif()
-	
-	#message(STATUS EXECUTABLE_OUTPUT_PATH: ${EXECUTABLE_OUTPUT_PATH})
-	#message(STATUS PROJECT_BINARY_DIR: ${PROJECT_BINARY_DIR})
-	#message(STATUS CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR})
 else()
 	message(STATUS CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE})
 endif()
@@ -288,8 +278,8 @@ elseif(MSVC)
                                        #-DUSE_OPENAL
 					-DUSE_EXCEPTIONS)
         ## Check for Version ##
-        if( WINRT OR WINDOWS10 ) # Windows RT
-			add_definitions(-DUSE_WINRT)
+        if( USE_SYSTEM_DX ) # System DirectX
+			add_definitions(-DUSE_SYS_DX)
         endif()
 		
 		if (WINDOWS10)
@@ -1024,67 +1014,7 @@ if(MSVC)
 endif()
 
 set(WIN32_RESOURCES
-	# sys/win32/rc/res/BEVEL.BMP
-	# sys/win32/rc/res/BITMAP2.BMP
-	# sys/win32/rc/res/BMP00001.BMP
-	# sys/win32/rc/res/BMP0002.BMP
-	# sys/win32/rc/res/DEFTEX.WAL
-	# sys/win32/rc/res/ENDCAP.BMP
-	# sys/win32/rc/res/GetString.htm
-	# sys/win32/rc/res/IBEVEL.BMP
-	# sys/win32/rc/res/IENDCAP.BMP
-	# sys/win32/rc/res/MEFileToolbar.bmp
-	# sys/win32/rc/res/MEtoolbar.bmp
-	# sys/win32/rc/res/MaterialEditor.ico
-	# sys/win32/rc/res/PropTree.rc2
-	# sys/win32/rc/res/Q.BMP
-	# sys/win32/rc/res/RADIANT3.GIF
-	# sys/win32/rc/res/Radiant.ico
-	# sys/win32/rc/res/RadiantDoc.ico
-	# sys/win32/rc/res/TOOLBAR1.BMP
-	# sys/win32/rc/res/TOOLBAR2.BMP
-	# sys/win32/rc/res/Toolbar.bmp
-	# sys/win32/rc/res/VIEWDEFA.BMP
-	# sys/win32/rc/res/VIEWOPPO.BMP
-	# sys/win32/rc/res/bmp00002.bmp
-	# sys/win32/rc/res/bmp00003.bmp
-	# sys/win32/rc/res/bmp00004.bmp
-	# sys/win32/rc/res/bmp00005.bmp
-	# sys/win32/rc/res/cchsb.bmp
-	# sys/win32/rc/res/ccrgb.bmp
-	# sys/win32/rc/res/dbg_back.bmp
-	# sys/win32/rc/res/dbg_breakpoint.ico
-	# sys/win32/rc/res/dbg_current.ico
-	# sys/win32/rc/res/dbg_currentline.ico
-	# sys/win32/rc/res/dbg_empty.ico
-	# sys/win32/rc/res/dbg_open.bmp
-	# sys/win32/rc/res/dbg_toolbar.bmp
 	sys/win32/rc/res/doom.ico
-	# sys/win32/rc/res/fpoint.cur
-	# sys/win32/rc/res/fxed_link.ico
-	# sys/win32/rc/res/fxed_toolbar.bmp
-	# sys/win32/rc/res/fxeditor.ico
-	# sys/win32/rc/res/guied.ico
-	# sys/win32/rc/res/guied_collapse.ico
-	# sys/win32/rc/res/guied_expand.ico
-	# sys/win32/rc/res/guied_hand.cur
-	# sys/win32/rc/res/guied_nav_visible.ico
-	# sys/win32/rc/res/guied_nav_visibledisabled.ico
-	# sys/win32/rc/res/guied_scripts.ico
-	# sys/win32/rc/res/guied_scripts_white.ico
-	# sys/win32/rc/res/guied_viewer_toolbar.bmp
-	# sys/win32/rc/res/icon2.ico
-	# sys/win32/rc/res/logo_sm3dfx.bmp
-	# sys/win32/rc/res/matedtree.bmp
-	# sys/win32/rc/res/me_disabled_icon.ico
-	# sys/win32/rc/res/me_enabled.ico
-	# sys/win32/rc/res/me_off_icon.ico
-	# sys/win32/rc/res/me_on_icon.ico
-	# sys/win32/rc/res/qe3.ico
-	# sys/win32/rc/res/shaderbar.bmp
-	# sys/win32/rc/res/shaderdoc.ico
-	# sys/win32/rc/res/shaderframe.ico
-	# sys/win32/rc/res/spliter.cur
 	)
 
 
@@ -1467,7 +1397,7 @@ if(MSVC)
 	#		Xinput
 	#		)
 	#elseif(WINRT AND NOT OPENAL)
-	if (WINRT)
+	if (USE_SYSTEM_DX)
 		set(DirectX_LIBRARIES
 			dinput8
 			#dsound

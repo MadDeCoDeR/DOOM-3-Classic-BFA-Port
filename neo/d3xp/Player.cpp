@@ -264,7 +264,7 @@ idInventory::ClearPowerUps
 void idInventory::ClearPowerUps()
 {
 	int i;
-	for( i = 0; i < CDMAX_POWERUPS; i++ )
+	for( i = 0; i < MAX_POWERUPS; i++ )
 	{
 		powerupEndTime[ i ] = 0;
 	}
@@ -529,7 +529,7 @@ void idInventory::Save( idSaveGame* savefile ) const
 	{
 		savefile->WriteInt( clip[ i ].Get() );
 	}
-	for( i = 0; i < CDMAX_POWERUPS; i++ )
+	for( i = 0; i < MAX_POWERUPS; i++ )
 	{
 		savefile->WriteInt( powerupEndTime[ i ] );
 	}

@@ -1256,6 +1256,9 @@ void LoadPlatformDLL()
 				::op->SetAdditionalInfo("large image", "dbfa");
 				::op->SetAdditionalInfo("small image", "dbfa");
 				::op->SetAdditionalInfo("status", "Strting Game");
+				if (!idStr::Icmp("Steam", ::op->API_Name())) {
+					::op->openInput()->RegisterInputConfigurationFile(fileSystem->RelativePathToOSPath("bfa_actions.vdf"));
+				}
 				//::op->SetNotificationsPosition(0, 0); //GK: Who knows maybe someone want it on top left
 				common->Printf("%s Platform loaded sucessfully !!!\n", ::op->API_Name());
 			}
@@ -1270,8 +1273,7 @@ void UnloadPlatformDLL()
 	// shut down the platform object
 	if (::op != NULL)
 	{
-		::op->API_Shutdown();
-		
+		::op->API_Shutdown();		
 	}
 
 	if (platformDLL)
@@ -2372,6 +2374,9 @@ void idCommonLocal::PerformGameSwitch()
 		com_engineHz_latched = cl_engineHz.GetInteger();
 		//GK: End
 		DoomLib::SetCurrentExpansion( idealCurrentGame );
+		if (::op != NULL) {
+			::op->openInput()->ChangeControllerConfiguration("classic", 0);
+		}
 		
 	}
 	else if( idealCurrentGame == DOOM3_BFG )
@@ -2388,6 +2393,7 @@ void idCommonLocal::PerformGameSwitch()
 			if (::op) {
 				::op->SetAdditionalInfo("status", "Game Selection Menu");
 				::op->SetAdditionalInfo("large image", "dbfa");
+				::op->openInput()->ChangeControllerConfiguration("modern", 0);
 			}
 			session->MoveToPressStart();
 		}
