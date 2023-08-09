@@ -646,7 +646,7 @@ void idInventory::Restore( idRestoreGame* savefile )
 		savefile->ReadInt( savedClip );
 		clip[ i ].Set( savedClip );
 	}
-	for( i = 0; i < CDMAX_POWERUPS; i++ )
+	for( i = 0; i < MAX_POWERUPS; i++ )
 	{
 		savefile->ReadInt( powerupEndTime[ i ] );
 	}
@@ -4684,7 +4684,7 @@ void idPlayer::UpdatePowerUps()
 	
 	if( !common->IsClient() )
 	{
-		for( i = 0; i < CDMAX_POWERUPS; i++ )
+		for( i = 0; i < MAX_POWERUPS; i++ )
 		{
 			if( ( inventory.powerups & ( 1 << i ) ) && inventory.powerupEndTime[i] > gameLocal->time )
 			{
@@ -4789,7 +4789,7 @@ idPlayer::ClearPowerUps
 void idPlayer::ClearPowerUps()
 {
 	int i;
-	for( i = 0; i < CDMAX_POWERUPS; i++ )
+	for( i = 0; i < MAX_POWERUPS; i++ )
 	{
 		if( PowerUpActive( i ) )
 		{
