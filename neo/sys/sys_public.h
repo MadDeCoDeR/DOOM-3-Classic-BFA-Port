@@ -643,6 +643,7 @@ const char* 	Sys_SecToStr( int sec );
 
 //GK: Begin
 const char* Sys_Wcstrtombstr(const wchar_t* wstring);
+const wchar_t* Sys_Mbstrtowcstr(const char* string);
 //GK: End
 
 const char* 	Sys_DefaultBasePath();
@@ -662,6 +663,8 @@ typedef void ( *execOutputFunction_t )( const char* text );
 bool Sys_Exec(	const char* appPath, const char* workingPath, const char* args,
 				execProcessWorkFunction_t workFn, execOutputFunction_t outputFn, const int waitMS,
 				unsigned int& exitCode );
+
+const char* Sys_GetCallStack();
 
 // localization
 

@@ -45,12 +45,13 @@ idCVar stereoRender_warpCenterY( "stereoRender_warpCenterY", "0.5", CVAR_RENDERE
 idCVar stereoRender_warpParmZ( "stereoRender_warpParmZ", "0", CVAR_RENDERER | CVAR_FLOAT | CVAR_ARCHIVE, "development parm" );
 idCVar stereoRender_warpParmW( "stereoRender_warpParmW", "0", CVAR_RENDERER | CVAR_FLOAT | CVAR_ARCHIVE, "development parm" );
 idCVar stereoRender_warpTargetFraction( "stereoRender_warpTargetFraction", "1.0", CVAR_RENDERER | CVAR_FLOAT | CVAR_ARCHIVE, "fraction of half-width the through-lens view covers" );
+idCVar r_useOpenGLDSA("r_useOpenGLDSA", "-1", CVAR_RENDERER | CVAR_INTEGER | CVAR_ARCHIVE, "Enable/Disable OpenGL DSA. -1 = Enable based on system detection, 0 = Force to Disable, 1 = Force to Enable", -1, 1);
 
-#ifdef _DEBUG
-idCVar r_showSwapBuffers("r_showSwapBuffers", "1", CVAR_BOOL, "Show timings from GL_BlockingSwapBuffers");
-#else
+//#ifdef _DEBUG
+//idCVar r_showSwapBuffers("r_showSwapBuffers", "1", CVAR_BOOL, "Show timings from GL_BlockingSwapBuffers");
+//#else
 idCVar r_showSwapBuffers( "r_showSwapBuffers", "0", CVAR_BOOL, "Show timings from GL_BlockingSwapBuffers" );
-#endif
+//#endif
 idCVar r_syncEveryFrame( "r_syncEveryFrame", "1", CVAR_BOOL, "Don't let the GPU buffer execution past swapbuffers" );
 
 //GK: Begin
@@ -208,9 +209,9 @@ static void CALLBACK DebugCallback( unsigned int source, unsigned int type,
 		severityStr = "Notification";
 		break;
 	}
-	
+	idStr callStack = Sys_GetCallStack();
 	// RB: printf should be thread safe on Linux
-	idLib::Printf("caught OpenGL Error:\n\tSource:%s\n\tType: %s\n\tSeverity: %s\n\tMessage: %s\n", sourceStr.c_str(), typeStr.c_str(), severityStr.c_str(), message);
+	idLib::Printf("caught OpenGL Error:\n\tSource:%s\n\tType: %s\n\tSeverity: %s\n\tMessage: %s\n%s", sourceStr.c_str(), typeStr.c_str(), severityStr.c_str(), message, callStack.c_str());
 	// RB end
 }
 
@@ -303,7 +304,7 @@ static void R_CheckPortableExtensions()
 	
 	// GL_ARB_direct_state_access
 	//GK: Use the core direct State Access intead (what purpose the EXT has?)
-	glConfig.directStateAccess = GLEW_ARB_direct_state_access != 0 && glConfig.glVersion >= 4.5;
+	glConfig.directStateAccess = (r_useOpenGLDSA.GetInteger() < 0) ? GLEW_ARB_direct_state_access != 0 && glConfig.glVersion >= 4.5 : r_useOpenGLDSA.GetBool();
 
 	R_PrintExtensionStatus(glConfig.directStateAccess, "GL_ARB_direct_state_access");
 	
@@ -724,7 +725,7 @@ void idRenderBackend::DrawElementsWithCounters( const drawSurf_t* surf )
 	}
 
 	renderProgManager.CommitUniforms(glStateBits);
-	if (glConfig.directStateAccess) {
+	if (glConfig.directStateAccess) {		
 		// RB: 64 bit fixes, changed GLuint to GLintptr
 		if ((GLintptr)currentIndexBuffer != (GLintptr)indexBuffer->GetAPIObject() || !r_useStateCaching.GetBool())
 		{
@@ -843,7 +844,7 @@ void idRenderBackend::GL_EndFrame()
 	// Fix for the steam overlay not showing up while in game without Shell/Debug/Console/Menu also rendering
 	glColorMask( 1, 1, 1, 1 );
 	
-	glFlush();
+	//glFlush();
 }
 
 /*
@@ -1823,7 +1824,7 @@ void idRenderBackend::DrawFlickerBox()
 		glClearColor( 0, 1, 0, 1 );
 	}
 	glScissor( 0, 0, 256, 256 );
-	glClear( GL_COLOR_BUFFER_BIT );
+	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT );
 }
 
 /*
@@ -1910,7 +1911,7 @@ void idRenderBackend::GL_BlockingSwapBuffers()
 		const int start = Sys_Milliseconds();
 		glScissor( 0, 0, 1, 1 );
 		glEnable( GL_SCISSOR_TEST );
-		glClear( GL_COLOR_BUFFER_BIT );
+		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT );
 		renderSync[swapIndex] = glFenceSync( GL_SYNC_GPU_COMMANDS_COMPLETE, 0 );
 		const int end = Sys_Milliseconds();
 		if( r_showSwapBuffers.GetBool() && end - start > 1 )
@@ -2168,7 +2169,7 @@ void idRenderBackend::StereoRenderExecuteBackEndCommands( const emptyCommand_t* 
 			
 			// force the HDMI 720P 3D guard band to a constant color
 			glScissor( 0, 720, 1280, 30 );
-			glClear( GL_COLOR_BUFFER_BIT );
+			glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT );
 			break;
 			
 		default:
@@ -2186,7 +2187,7 @@ void idRenderBackend::StereoRenderExecuteBackEndCommands( const emptyCommand_t* 
 				// clears are fast...
 				glScissor( 0, 0, glConfig.nativeScreenWidth, glConfig.nativeScreenHeight );
 				glClearColor( 0, 0, 0, 0 );
-				glClear( GL_COLOR_BUFFER_BIT );
+				glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT );
 				
 				// the size of the box that will get the warped pixels
 				// With the 7" displays, this will be less than half the screen width

@@ -66,7 +66,7 @@ static HANDLE dxDevice;
 
 static HWND tempHwnd;
 
-idCVar r_useOpenGLProfile( "r_useOpenGLProfile", "2", CVAR_INTEGER, "0 = OpenGL 4.5 no profile, 1 = OpenGL 4.5 compatibility profile, 2 = OpenGL 4.5 core profile", 0, 2 );
+idCVar r_useOpenGLProfile( "r_useOpenGLProfile", "1", CVAR_INTEGER, "0 = OpenGL 4.5 no profile, 1 = OpenGL 4.5 compatibility profile, 2 = OpenGL 4.5 core profile", 0, 2 );
 
 
 
@@ -392,6 +392,10 @@ static HGLRC CreateOpenGLContextOnDC( const HDC hdc, const bool debugContext )
 	int useCoreProfile = r_useOpenGLProfile.GetInteger();
 	HGLRC m_hrc = NULL;
 	
+	if (!WGLEW_NV_DX_interop2) {
+		common->FatalError("WGL_NV_DX_interop2 is not supported");
+	}
+
 	for( int i = 0; i < 2; i++ )
 	{
 		//GK: Try to call that here so if the compatibility or core profiles fail then create a context without ARB
@@ -437,7 +441,7 @@ static HGLRC CreateOpenGLContextOnDC( const HDC hdc, const bool debugContext )
 			{
 				glConfig.driverType = GLDRV_OPENGL3X;
 			}
-			
+
 			break;
 		}
 		
@@ -541,9 +545,7 @@ static bool GLW_InitDriver( glimpParms_t parms )
 	{
 		sizeof( PIXELFORMATDESCRIPTOR ),	// size of this pfd
 		1,								// version number
-		PFD_DRAW_TO_WINDOW |			// support window
-		PFD_SUPPORT_OPENGL |			// support OpenGL
-		PFD_DOUBLEBUFFER,				// double buffered
+		PFD_SUPPORT_OPENGL,				// support OpenGL
 		PFD_TYPE_RGBA,					// RGBA type
 		32,								// 32-bit color depth
 		0, 0, 0, 0, 0, 0,				// color bits ignored

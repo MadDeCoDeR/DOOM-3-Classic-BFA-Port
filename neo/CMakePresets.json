@@ -116,9 +116,22 @@
       "generator": "Visual Studio 17"
     },
     {
+      "name": "windows-x64-2022-dxgi",
+      "displayName": "VS2022: 64-bit Windows with dxgi",
+      "binaryDir": "${sourceParentDir}/buildx64dxgi",
+      "inherits": "windows-x64-base",
+      "generator": "Visual Studio 17",
+      "cacheVariables": {
+        "USE_DXGI": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      }
+    },
+    {
       "name": "windows-x64-2022-legacy",
       "displayName": "VS2022: 64-bit Windows Legacy Mode",
-      "binaryDir": "${sourceParentDir}/buildx64Legacy",
+      
       "inherits": "windows-x64-base",
       "generator": "Visual Studio 17",
       "cacheVariables": {

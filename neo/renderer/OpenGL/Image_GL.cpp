@@ -755,11 +755,11 @@ void idImage::SetTextureParameters() {
 			{
 				aniso = 0;
 			}
-			glTextureParameterf(texnum, GL_TEXTURE_MAX_ANISOTROPY_EXT, aniso);
+			glTextureParameterf(texnum, (glConfig.glVersion == 4.6) ? GL_TEXTURE_MAX_ANISOTROPY : GL_TEXTURE_MAX_ANISOTROPY_EXT, aniso);
 		}
 		else
 		{
-			glTextureParameterf(texnum, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1);
+			glTextureParameterf(texnum, (glConfig.glVersion == 4.6) ? GL_TEXTURE_MAX_ANISOTROPY : GL_TEXTURE_MAX_ANISOTROPY_EXT, 1);
 		}
 	}
 
@@ -768,7 +768,7 @@ void idImage::SetTextureParameters() {
 	if( glConfig.textureLODBiasAvailable && ( usage != TD_FONT ) )
 	{
 		// use a blurring LOD bias in combination with high anisotropy to fix our aliasing grate textures...
-		glTextureParameterf( texnum, GL_TEXTURE_LOD_BIAS_EXT, r_lodBias.GetFloat() );
+		glTextureParameterf( texnum, (glConfig.glVersion == 4.6) ? GL_TEXTURE_LOD_BIAS : GL_TEXTURE_LOD_BIAS_EXT, r_lodBias.GetFloat() );
 	}
 	*/
 	// RB end
@@ -999,25 +999,37 @@ void idImage::AllocImage()
 			target = uploadTarget = GL_TEXTURE_2D;
 			numSides = 1;
 	}
+#ifndef _WIN32
+	int w = opts.width > 0 ? opts.width : 1280;
+	int h = opts.height > 0 ? opts.height : 720;
+#else
+	int w = opts.width;
+	int h = opts.height;
+#endif
 
 	if (!glConfig.directStateAccess) {
 		glGenTextures(1, (GLuint*)&texnum);
 		assert(texnum != TEXTURE_NOT_LOADED);
 		glBindTexture(target, texnum);
 		if (opts.textureType == TT_2D_ARRAY) {
-			glTexImage3D(uploadTarget, 0, internalFormat, opts.width, opts.height, numSides, 0, dataFormat, GL_UNSIGNED_BYTE, NULL);
+			glTexImage3D(uploadTarget, 0, internalFormat, w, h, numSides, 0, dataFormat, GL_UNSIGNED_BYTE, NULL);
 		}
 		else if (opts.textureType == TT_2D_MULTISAMPLE) {
-			glTexImage2DMultisample(uploadTarget, opts.samples, internalFormat, opts.width, opts.height, GL_FALSE);
+			glTexImage2DMultisample(uploadTarget, opts.samples, internalFormat, w, h, GL_FALSE);
 		}else{
+			if (opts.textureType == TT_CUBIC)
+			{
+				h = w;
+			}
 			for (int side = 0; side < numSides; side++)
 			{
-				int w = opts.width > 0 ? opts.width : 1280;
-				int h = opts.height > 0 ? opts.height : 720;
-				if (opts.textureType == TT_CUBIC)
-				{
-					h = w;
-				}
+#ifndef _WIN32
+				w = opts.width > 0 ? opts.width : 1280;
+				h = opts.height > 0 ? opts.height : 720;
+#else
+				w = opts.width;
+				h = opts.height;
+#endif
 				for (int level = 0; level < opts.numLevels; level++)
 				{
 
@@ -1069,8 +1081,6 @@ void idImage::AllocImage()
 	}
 	else 
 	{
-		int w = opts.width > 0 ? opts.width : 1280;
-		int h = opts.height > 0 ? opts.height : 720;
 		glCreateTextures(target, 1, (GLuint*)&texnum);
 		if (texnum != TEXTURE_NOT_LOADED) {
 			if (opts.textureType == TT_2D_ARRAY) {

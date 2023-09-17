@@ -40,7 +40,7 @@ If you have questions concerning this license or the applicable additional terms
 
 // DG: needed for Sys_ReLaunch()
 #include <dirent.h>
-
+#include <execinfo.h>
 static const char** cmdargv = NULL;
 static int cmdargc = 0;
 // DG end
@@ -585,4 +585,31 @@ int main( int argc, const char** argv )
 	{
 		common->Frame();
 	}
+}
+
+const char* Sys_GetCallStack() {
+	char* callStack = new char[5000];
+	sprintf(callStack, "Called: ");
+	void* stack[62];
+	int frames = backtrace(stack, 62);
+	char** frameLines = backtrace_symbols(stack, frames);
+	for (int frame = 1; frame < frames; frame++) {
+		strcat(callStack, frameLines[frame]);
+		strcat(callStack, "\n\t");
+	}
+	return callStack;
+}
+
+const char* Sys_Wcstrtombstr(const wchar_t* wstring) {
+	int wstrlen = wcslen(wstring);
+	char* dest = new char[wstrlen];
+	int mblength = wcstombs(dest, wstring, wstrlen);
+	return dest;
+}
+
+const wchar_t* Sys_Mbstrtowcstr(const char* string) {
+	int mbstrlen = strlen(string);
+	wchar_t* dest = new wchar_t[mbstrlen];
+	mbstowcs(dest, string, mbstrlen);
+	return dest;
 }
