@@ -177,14 +177,14 @@ enum sys_jEvents
 	J_ACTION_MAX = J_ACTION32,
 	
 	J_AXIS_MIN,
-	J_AXIS_LEFT_X = J_AXIS_MIN + AXIS_LEFT_X,
-	J_AXIS_LEFT_Y = J_AXIS_MIN + AXIS_LEFT_Y,
-	J_AXIS_RIGHT_X = J_AXIS_MIN + AXIS_RIGHT_X,
-	J_AXIS_RIGHT_Y = J_AXIS_MIN + AXIS_RIGHT_Y,
-	J_AXIS_LEFT_TRIG = J_AXIS_MIN + AXIS_LEFT_TRIG,
-	J_AXIS_RIGHT_TRIG = J_AXIS_MIN + AXIS_RIGHT_TRIG,
+	J_AXIS_LEFT_X = J_AXIS_MIN + static_cast<int>(AXIS_LEFT_X),
+	J_AXIS_LEFT_Y = J_AXIS_MIN + static_cast<int>(AXIS_LEFT_Y),
+	J_AXIS_RIGHT_X = J_AXIS_MIN + static_cast<int>(AXIS_RIGHT_X),
+	J_AXIS_RIGHT_Y = J_AXIS_MIN + static_cast<int>(AXIS_RIGHT_Y),
+	J_AXIS_LEFT_TRIG = J_AXIS_MIN + static_cast<int>(AXIS_LEFT_TRIG),
+	J_AXIS_RIGHT_TRIG = J_AXIS_MIN + static_cast<int>(AXIS_RIGHT_TRIG),
 	
-	J_AXIS_MAX = J_AXIS_MIN + MAX_JOYSTICK_AXIS - 1,
+	J_AXIS_MAX = J_AXIS_MIN + static_cast<int>(MAX_JOYSTICK_AXIS) - 1,
 	
 	J_DPAD_UP,
 	J_DPAD_DOWN,
@@ -628,22 +628,22 @@ typedef HANDLE idFileHandle;
 #else
 typedef FILE* idFileHandle;
 #endif
-// RB end
-
+// RB end 
 
 ID_TIME_T		Sys_FileTimeStamp( idFileHandle fp );
 // NOTE: do we need to guarantee the same output on all platforms?
 const char* 	Sys_TimeStampToStr( ID_TIME_T timeStamp );
 //GK: Begin
 #ifdef WIN32
-const char*		Sys_GetSystemFormatedTime(ID_TIME_TYPE timeStamp);
+int				Sys_GetSystemFormatedTime(char* Dest, ID_TIME_TYPE timeStamp);
+void			Sys_ParseError(int errorCode, char* msgbuf, int buffersize);
 #endif
 //GK: End
 const char* 	Sys_SecToStr( int sec );
 
 //GK: Begin
-const char* Sys_Wcstrtombstr(const wchar_t* wstring);
-const wchar_t* Sys_Mbstrtowcstr(const char* string);
+int				Sys_Wcstrtombstr(char* Dest, const wchar_t* Source, size_t size);
+int				Sys_Mbstrtowcstr(wchar_t* Dest, const char* string, size_t size);
 //GK: End
 
 const char* 	Sys_DefaultBasePath();
@@ -664,7 +664,7 @@ bool Sys_Exec(	const char* appPath, const char* workingPath, const char* args,
 				execProcessWorkFunction_t workFn, execOutputFunction_t outputFn, const int waitMS,
 				unsigned int& exitCode );
 
-const char* Sys_GetCallStack();
+void Sys_GetCallStack(char* Dest);
 
 // localization
 

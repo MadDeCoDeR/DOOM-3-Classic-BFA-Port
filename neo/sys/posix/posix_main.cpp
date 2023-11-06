@@ -43,6 +43,8 @@ If you have questions concerning this license or the applicable additional terms
 #include <signal.h>
 #include <fcntl.h>
 #include <fnmatch.h>
+#include <SDL.h>
+#include "../sdl/res/doom_ico.cpp"
 
 // RB begin
 #if defined(__ANDROID__)
@@ -104,7 +106,12 @@ const char* Sys_DefaultSavePath()
 		SDL_free( base_path );
 	}
 #else
-	sprintf( savepath, "%s/.doombfa", getenv( "HOME" ) );
+	char* rootPath = getenv("XDG_DATA_HOME");
+	if (rootPath == NULL) {
+		rootPath = getenv("HOME");
+	}
+
+	sprintf( savepath, "%s/.doombfa", rootPath );
 #endif
 	
 	return savepath.c_str();
@@ -414,9 +421,9 @@ Recursively search for a specified file
 in a parent folder
 ================
 */
-std::string findFile(const char* folder, const char* file, std::string path = "") {
-	std::string result = path;
-	std::string rootPath = path + folder + "/";
+idStr findFile(const char* folder, const char* file, idStr path = "") {
+	idStr result = path;
+	idStr rootPath = path + folder + "/";
 	DIR* parent = opendir(rootPath.c_str());
 	if (parent) {
 		dirent* entry;
@@ -425,7 +432,7 @@ std::string findFile(const char* folder, const char* file, std::string path = ""
 				switch (entry->d_type) {
 				case DT_DIR:
 					result = findFile(entry->d_name, file, rootPath);
-					if (result.rfind(file) != std::string::npos) {
+					if (result.Find(file) != -1) {
 						closedir(parent);
 						return result;
 					}
@@ -455,6 +462,57 @@ Get the default base path
 Try to be intelligent: if there is no BASE_GAMEDIR, try the next path
 ================
 */
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+idSysMutex mutex, mutex1; //GK: Bidirectional communication requires two mutexes
+bool isDone = false;
+
+/*
+GK: Show a splash screen while the engine looks up for the game folder. 
+The splash screen will keep rendering until it get a signal from the main thread (either on success or failure).
+Then it properly disposes the data it allocated and send a signal back that it is done
+*/
+void ShowSplash (void* data) {
+	int windowPos = SDL_WINDOWPOS_UNDEFINED;
+	SDL_Window* splashWindow = SDL_CreateWindow("", windowPos, windowPos, 800, 600, SDL_WINDOW_BORDERLESS);
+	SDL_Renderer* renderer = SDL_CreateRenderer(splashWindow, -1, SDL_RENDERER_ACCELERATED);
+	Uint32 rmask, gmask, bmask, amask;
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+	int shift = (doom_icon.bytes_per_pixel == 3) ? 8 : 0;
+	rmask = 0xff000000 >> shift;
+	gmask = 0x00ff0000 >> shift;
+	bmask = 0x0000ff00 >> shift;
+	amask = 0x000000ff >> shift;
+#else // little endian, like x86
+	rmask = 0x000000ff;
+	gmask = 0x0000ff00;
+	bmask = 0x00ff0000;
+	amask = (doom_icon.bytes_per_pixel == 3) ? 0 : 0xff000000;
+#endif
+		
+	SDL_Surface* surf = SDL_CreateRGBSurfaceFrom((void*)doom_icon.pixel_data, doom_icon.width, doom_icon.height,
+		doom_icon.bytes_per_pixel * 8, doom_icon.bytes_per_pixel * doom_icon.width, rmask, gmask, bmask, amask);
+	SDL_Texture* splashImage = SDL_CreateTextureFromSurface(renderer, surf);
+	int w, h;
+	SDL_QueryTexture(splashImage, NULL, NULL, &w, &h);
+
+	SDL_Rect rectangle = {0, 0, 800, 600};
+
+	while(!isDone) {
+		SDL_RenderClear(renderer);
+		SDL_RenderCopy(renderer, splashImage, NULL, &rectangle);
+		SDL_RenderPresent(renderer);
+	}
+
+	SDL_DestroyTexture(splashImage);
+	SDL_FreeSurface(surf);
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(splashWindow);
+
+	idScopedCriticalSection cs1(mutex1);
+	isDone = false;
+}
+#endif
+
 const char* Sys_DefaultBasePath()
 {
 	struct stat st;
@@ -491,31 +549,48 @@ const char* Sys_DefaultBasePath()
 		}
 	}
 
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+	//GK: This might take a while especially if the game is not installed so show a splash screen the the engine's ico until then
+	Sys_CreateThread((xthread_t)ShowSplash, NULL, THREAD_LOWEST, "Show Splash", CORE_ANY);
+#endif
 	//common->Printf( "WARNING: using hardcoded default base path %s\n", DEFAULT_BASEPATH );
 	idList<idStr> basePaths;
 	basePaths.Append(idStr(getenv("HOME")));
 	basePaths.Append(idStr("/run/media/"));
 	basePaths.Append(idStr("/media/"));
-	std::string foundPath = "";
 	struct stat commonStat;
 	for (int i = 0; i < 3; i++) {
-		foundPath = findFile(basePaths[i].c_str(), "_common.resources");
-		
-		if (foundPath.rfind("_common.resources") != std::string::npos) {
+		basepath = findFile(basePaths[i].c_str(), "_common.resources");
+
+		if (basepath.Find("_common.resources") != -1) {
 			break;
 		}
 	}
-	if (stat(foundPath.c_str(), &commonStat) < 0) {
-		common->FatalError("Failed to find the Game's base path");
+	if (stat(basepath.c_str(), &commonStat) < 0) {
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+		//GK: Multi-thread sanity check, make sure the splash screen has been properly disposed before we do anything else (either throw an error or return the found game folder)
+		idScopedCriticalSection cs(mutex);
+		isDone = true;
+		while(isDone) {
+			Sys_Sleep(1);
+		}
+#endif
+		common->FatalError("Failed to find the Game's base path\nPlease install a compatible Game");
 	}
-	if (foundPath.rfind("_common.resources") != std::string::npos) {
-		foundPath = foundPath.substr(0, foundPath.rfind("/"));
-		foundPath = foundPath.substr(0, foundPath.rfind("/"));
+	if (basepath.Find("_common.resources") != -1) {
+		basepath = basepath.SubStr(0, basepath.FindLast("/"));
+		basepath = basepath.SubStr(0, basepath.FindLast("/"));
 	}
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+	//GK: Multi-thread sanity check, make sure the splash screen has been properly disposed before we do anything else (either throw an error or return the found game folder)
+	idScopedCriticalSection cs(mutex);
+	isDone = true;
+	while(isDone) {
+		Sys_Sleep(1);
+	}
+#endif
 	//GK: Crazy const char desease
-	char* finalPath = new char[foundPath.size() + 1];
-	strcpy(finalPath, foundPath.c_str());
-	return finalPath;
+	return basepath;
 }
 
 /*
@@ -810,7 +885,25 @@ Sys_Init
 Posix_EarlyInit/Posix_LateInit is better
 =================
 */
-void Sys_Init() { }
+/*GK: SDL_Init is used to Initialize various SDL submodules. 
+ SDL_Init should be called ONLY ONCE, when the engine starts,
+  and also it needs all the flags for proper setup (without SDL_INIT_GAMECONTROLLER latest versions cause performance degregation when using a controller)
+ */
+void Sys_Init() {
+	#if SDL_VERSION_ATLEAST(2, 0, 0)
+	if( !SDL_WasInit( SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC) )
+#else
+	if( !SDL_WasInit( SDL_INIT_VIDEO | SDL_INIT_JOYSTICK ) )
+#endif
+	{
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+		if( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC ) )
+#else
+		if( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_JOYSTICK ) )
+#endif
+			common->FatalError( "Error while initializing SDL: %s", SDL_GetError() );
+	}
+ }
 
 /*
 =================
@@ -1676,13 +1769,17 @@ Sys_Error
 void Sys_Error( const char* error, ... )
 {
 	va_list argptr;
+	char text[4096];
 	
 	Sys_Printf( "Sys_Error: " );
 	va_start( argptr, error );
-	Sys_DebugVPrintf( error, argptr );
+	vsprintf(text, error, argptr);
 	va_end( argptr );
+	Sys_Printf(text);
 	Sys_Printf( "\n" );
-	
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "System Error", text, NULL);
+#endif
 	Posix_Exit( EXIT_FAILURE );
 }
 

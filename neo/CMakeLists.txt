@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
-set(CMAKE_TOOLCHAIN_FILE "${CMAKE_SOURCE_DIR}/../../../vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+option (USE_VCPKG
+				"Use vcpkg to manage depedencies" ON)
+
+if (USE_VCPKG)
+	set(CMAKE_TOOLCHAIN_FILE "${CMAKE_SOURCE_DIR}/../vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+endif()
 project(DoomBFA)
 
 option(USE_MFC_TOOLS
@@ -1541,8 +1546,11 @@ if(MSVC)
 		add_definitions(-DUSE_FFMPEG)
 	
 		if (USE_PACKAGED_FFMPEG)
-			#find_package(ffmpeg REQUIRED)
+		if (NOT USE_VCPKG)
+			find_package(FFMPEGDNL REQUIRED)
+		else()
 			set(FFMPEG_FOUND TRUE)
+		endif()
 		else(USE_PACKAGED_FFMPEG)
 			set(FFMPEG_FOUND FALSE)
 		endif(USE_PACKAGED_FFMPEG)
@@ -1787,7 +1795,11 @@ else()
 
 	if(UNIX)
 		if(FFMPEG)
+		if (USE_VCPKG)
 			find_package(FFMPEG REQUIRED)
+		else(USE_VCPKG)
+			find_package(FFMPEGDNL REQUIRED)
+		endif(USE_VCPKG)
 			add_definitions(-DUSE_FFMPEG)
 			
 			include_directories(${FFMPEG_INCLUDE_DIR})

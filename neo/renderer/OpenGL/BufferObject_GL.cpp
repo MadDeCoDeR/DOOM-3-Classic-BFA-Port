@@ -131,12 +131,12 @@ bool idVertexBuffer::AllocBufferObject( const void* data, int allocSize, bufferU
 		glNamedBufferStorage(apiObject, numBytes, NULL, bufferStorageFlags);
 	}
 	
-	/*GLenum err = glGetError();
+	GLenum err = glGetError();
 	if( err == GL_OUT_OF_MEMORY )
 	{
 		idLib::Warning( "idVertexBuffer::AllocBufferObject: allocation failed" );
 		allocationFailed = true;
-	}*/
+	}
 	
 	if( r_showBuffers.GetBool() )
 	{
@@ -389,12 +389,12 @@ bool idIndexBuffer::AllocBufferObject( const void* data, int allocSize, bufferUs
 		glNamedBufferStorage(apiObject, numBytes, NULL, bufferStorageFlags);
 	}
 	
-	/*GLenum err = glGetError();
+	GLenum err = glGetError();
 	if( err == GL_OUT_OF_MEMORY )
 	{
 		idLib::Warning( "idIndexBuffer:AllocBufferObject: allocation failed" );
 		allocationFailed = true;
-	}*/
+	}
 	
 	if( r_showBuffers.GetBool() )
 	{

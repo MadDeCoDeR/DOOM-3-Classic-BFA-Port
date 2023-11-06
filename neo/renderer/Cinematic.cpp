@@ -73,6 +73,7 @@ extern "C"
 #include <libavutil/imgutils.h>
 }
 bool hasplanar = true;
+#define NUM_LAG_FRAMES 15	// SRS - Lag audio by 15 frames (~1/2 sec at 30 fps) for ffmpeg bik decoder AV sync
 #endif
 
 #ifdef USE_BINKDEC
@@ -127,7 +128,13 @@ private:
 	cinData_t				ImageForTimeFFMPEG( int milliseconds );
 	bool					InitFromFFMPEGFile( const char* qpath, bool looping );
 	void					FFMPEGReset();
-	std::queue<AVPacket>	packets[NUM_BUFFERS];
+	//GK: Golden rule about data streaming: USE QUEUEs, anything else is not acceptable.
+	//You need to know how many packets are left and which one must go first. Queues are allowing us to do that without any weird hacky way
+	std::queue<uint8_t*>				lagBuffer;
+	std::queue<int>						lagBufSize;
+	int						lagIndex;
+	bool					skipLag;
+	std::queue<AVPacket>	packets;
 #endif
 #ifdef USE_BINKDEC
 	BinkHandle				binkHandle;
@@ -441,6 +448,10 @@ idCinematicLocal::idCinematicLocal()
 	audio_stream_index = -1;
 	img_convert_ctx = NULL;
 	hasFrame = false;
+	lagIndex = 0;
+	skipLag = false;
+	lagBuffer.push(NULL);
+	lagBufSize.push(0);
 #endif
 	
 #ifdef USE_BINKDEC
@@ -528,6 +539,7 @@ idCinematicLocal::~idCinematicLocal()
 #else
 	av_freep( &frame );
 	av_freep( &frame2 );
+	av_freep( &frame3 );
 #endif
 	
 	if( fmt_ctx )
@@ -627,7 +639,7 @@ bool idCinematicLocal::InitFromFFMPEGFile( const char* qpath, bool amilooping )
 	video_stream_index = ret;
 	dec_ctx = avcodec_alloc_context3(dec);
 	if ((ret = avcodec_parameters_to_context(dec_ctx, fmt_ctx->streams[video_stream_index]->codecpar)) < 0) {
-		char* error = new char[256];
+		char error[256];
 		av_strerror(ret, error, 256);
 		common->Warning("idCinematic: Failed to create codec context from codec parameters with error: %s\n", error);
 	}
@@ -637,7 +649,7 @@ bool idCinematicLocal::InitFromFFMPEGFile( const char* qpath, bool amilooping )
 	/* init the video decoder */
 	if( ( ret = avcodec_open2( dec_ctx, dec, NULL ) ) < 0 )
 	{
-		char* error = new char[256];
+		char error[256];
 		av_strerror(ret, error, 256);
 		common->Warning( "idCinematic: Cannot open video decoder for: '%s', %d, with message: %s\n", qpath, looping, error );
 		return false;
@@ -649,7 +661,7 @@ bool idCinematicLocal::InitFromFFMPEGFile( const char* qpath, bool amilooping )
 		audio_stream_index = ret2;
 		dec_ctx2 = avcodec_alloc_context3(dec);
 		if ((ret2 = avcodec_parameters_to_context(dec_ctx2, fmt_ctx->streams[audio_stream_index]->codecpar)) < 0) {
-			char* error = new char[256];
+			char error[256];
 			av_strerror(ret2, error, 256);
 			common->Warning("idCinematic: Failed to create codec context from codec parameters with error: %s\n", error);
 		}
@@ -745,6 +757,19 @@ void idCinematicLocal::FFMPEGReset()
 	//startTime = 0;
 	
 	framePos = -1;
+	if (audio_stream_index >= 0) {
+		cinematicAudio->ResetAudio();
+		lagIndex = 0;
+		//GK: Just in case
+		if (!lagBufSize.empty()) {
+			while (!lagBufSize.empty()) {
+				lagBufSize.pop();
+				uint8_t* data = lagBuffer.front();
+				lagBuffer.pop();
+				av_freep(&data);
+			}
+		}
+	}
 	
 	if( av_seek_frame( fmt_ctx, video_stream_index, 0, 0 ) >= 0 )
 	{
@@ -877,6 +902,12 @@ bool idCinematicLocal::InitFromFile( const char* qpath, bool amilooping )
 		else {
 			temp = fileName;
 		}
+		if (temp.CheckExtension(".roq") || temp.CheckExtension(".bik")) {
+			skipLag = false;
+		}
+		else {
+			skipLag = true;
+		}
 		animationLength = 0;
 		hasFrame = false;
 		RoQShutdown();
@@ -955,6 +986,30 @@ void idCinematicLocal::Close()
 		if( img_convert_ctx )
 		{
 			sws_freeContext( img_convert_ctx );
+		}
+
+		if (audio_stream_index >= 0) {
+			if (dec_ctx2)
+			{
+				avcodec_free_context(&dec_ctx2);
+			}
+
+			// SRS - Free resample context if we were decoding planar audio
+			if (swr_ctx)
+			{
+				swr_free(&swr_ctx);
+			}
+
+			lagIndex = 0;
+			//GK: Just in case
+			if (!lagBufSize.empty()) {
+				while (!lagBufSize.empty()) {
+					lagBufSize.pop();
+					uint8_t* data = lagBuffer.front();
+					lagBuffer.pop();
+					av_freep(&data);
+				}
+			}
 		}
 		
 		img_convert_ctx = NULL;
@@ -1150,7 +1205,7 @@ cinData_t idCinematicLocal::ImageForTimeFFMPEG( int thisTime )
 {
 	cinData_t	cinData;
 	//int i = 0;
-	uint8_t** tBuffer2 = NULL;
+	uint8_t* soundBuffer = NULL;
 	int num_bytes = 0;
 	if( thisTime <= 0 )
 	{
@@ -1239,58 +1294,110 @@ cinData_t idCinematicLocal::ImageForTimeFFMPEG( int thisTime )
 			{
 				// Decode video frame
 				if ((res = avcodec_send_packet(dec_ctx, &packet)) != 0) {
-					char* error = new char[256];
+					char error[256];
 					av_strerror(res, error, 256);
 					common->Warning("idCinematic: Failed to send packet for decoding with message: %s\n", error);
 				}
 				else {
 					if ((frameFinished = avcodec_receive_frame(dec_ctx, frame)) != 0) {
-						char* error = new char[256];
+						char error[256];
 						av_strerror(frameFinished, error, 256);
 						common->Warning("idCinematic: Failed to receive frame from decoding with message: %s\n", error);
+					}
+					else {
+						// We have reached the desired frame
+						// Convert the image from its native format to RGB
+						sws_scale(img_convert_ctx, frame->data, frame->linesize, 0, dec_ctx->height, frame2->data, frame2->linesize);
+						cinData.imageWidth = CIN_WIDTH;
+						cinData.imageHeight = CIN_HEIGHT;
+						cinData.status = status;
+						img->UploadScratch(image, CIN_WIDTH, CIN_HEIGHT);
+						hasFrame = true;
+						cinData.image = img;
 					}
 				}
 			}
 			//GK:Begin
 			if (packet.stream_index == audio_stream_index) {//Check if it found any audio data
-				packets->push(packet);
-				res = avcodec_send_packet(dec_ctx2, &packets->front());
+				res = avcodec_send_packet(dec_ctx2, &packet);
 				if (res != 0 && res != AVERROR(EAGAIN)) {
-					char* error = new char[256];
+					char error[256];
 					av_strerror(res, error, 256);
 					common->Warning("idCinematic: Failed to send packet for decoding with message: %s\n", error);
 				}
-				else {
-					packet = packets->front();
-					packets->pop();
+				//GK: Keep the audio from still trying to playback audio even if there are no more any new audio frames.
+				//Since we queue the frames for a small delay we might still have unplayed frames in the queue
+				frameFinished1 = 0;
+				while (frameFinished1 == 0 || !lagBufSize.empty()) {
+					num_bytes = 0;
 					if ((frameFinished1 = avcodec_receive_frame(dec_ctx2, frame3)) != 0) {
-						char* error = new char[256];
-						av_strerror(frameFinished1, error, 256);
-						common->Warning("idCinematic: Failed to receive frame from decoding with message: %s\n", error);
-					}
+						if (frameFinished1 != AVERROR(EAGAIN)) {
+							char error[256];
+							av_strerror(frameFinished1, error, 256);
+							common->Warning("idCinematic: Failed to receive frame from decoding with message: %s\n", error);
+						}
+					} 
 					else {
 						int  bufflinesize;
 						if (hasplanar) {
-							av_samples_alloc_array_and_samples(&tBuffer2,
+							av_samples_alloc(&soundBuffer,
 								&bufflinesize,
 								frame3->ch_layout.nb_channels,
 								av_rescale_rnd(frame3->nb_samples, frame3->sample_rate, frame3->sample_rate, AV_ROUND_UP),
 								dst_smp,
 								0);
-							int res1 = swr_convert(swr_ctx, tBuffer2, bufflinesize, (const uint8_t**)frame3->extended_data, frame3->nb_samples);
+							int res1 = swr_convert(swr_ctx, &soundBuffer, bufflinesize, (const uint8_t**)frame3->extended_data, frame3->nb_samples);
 							num_bytes = av_samples_get_buffer_size(&bufflinesize, frame3->ch_layout.nb_channels,
 								res1, dst_smp, 1);
 						}
 						else {
 							num_bytes = frame3->linesize[0];
-							tBuffer2 = (uint8_t**)malloc(sizeof(frame3->extended_data) / sizeof(uint8_t*));
-							tBuffer2[0] = (uint8_t*)malloc(num_bytes);
+							av_samples_alloc(&soundBuffer,
+								&bufflinesize,
+								frame3->ch_layout.nb_channels,
+								frame3->nb_samples,
+								dst_smp,
+								0);
 							if (num_bytes > 0) {
-								memcpy(tBuffer2[0], frame3->extended_data[0], num_bytes);
+								memcpy(soundBuffer, frame3->extended_data[0], num_bytes);
 							}
 						}
 					}
+
+					if (num_bytes > 0 || !lagBufSize.empty()) {
+						// SRS - If we have a lagged cinematic audio frame, then play it now
+						if (!lagBufSize.empty() && lagBufSize.front() > 0) {
+							uint8_t* data = lagBuffer.front();
+							lagBuffer.pop();
+							int size = lagBufSize.front();
+							lagBufSize.pop();
+							cinematicAudio->PlayAudio(data, size);
+						}
+						if (!lagBufSize.empty() && lagBufSize.front() == 0) {
+							if (skipLag) {
+								lagBuffer.pop();
+								lagBufSize.pop();
+							}
+							else if (lagIndex == NUM_LAG_FRAMES - 1) {
+								lagBuffer.pop();
+								lagBufSize.pop();
+							}
+						}
+						if (num_bytes > 0) {
+							lagBuffer.push(soundBuffer);
+							lagBufSize.push(num_bytes);
+
+							// SRS - If skipLag is true (e.g. RoQ, mp4, webm), reduce lag to 1 frame since AV playback is already synced
+							lagIndex = (lagIndex + 1) % (skipLag ? 1 : NUM_LAG_FRAMES);
+						}
+					}
+					// SRS - Not sure if an audioBuffer can ever be allocated on failure, but check and free just in case
+					else if (soundBuffer)
+					{
+						av_freep(&soundBuffer);
+					}
 				}
+				
 			}
 			//GK:End
 			// Free the packet that was allocated by av_read_frame
@@ -1302,18 +1409,6 @@ cinData_t idCinematicLocal::ImageForTimeFFMPEG( int thisTime )
 		
 	}
 	
-	// We have reached the desired frame
-	// Convert the image from its native format to RGB
-	sws_scale( img_convert_ctx, frame->data, frame->linesize, 0, dec_ctx->height, frame2->data, frame2->linesize );
-	cinData.imageWidth = CIN_WIDTH;
-	cinData.imageHeight = CIN_HEIGHT;
-	cinData.status = status;
-	img->UploadScratch( image, CIN_WIDTH, CIN_HEIGHT );
-	hasFrame = true;
-	cinData.image = img;
-	if (tBuffer2) {
-		cinematicAudio->PlayAudio(tBuffer2[0], num_bytes);
-	}
 	
 	return cinData;
 }
