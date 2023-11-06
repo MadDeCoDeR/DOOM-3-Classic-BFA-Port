@@ -1,0 +1,248 @@
+name: CMake
+
+on:
+  push:
+    # paths:
+    # - .github/workflows/cmake.yml
+  
+
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.) 
+  BUILD_TYPE: retail
+  VERSION: RC
+
+jobs:
+  linux-build:
+    # The CMake configure and build commands are platform agnostic and should work equally
+    # well on Windows or Mac.  You can convert this to a matrix build if you need
+    # cross-platform coverage.
+    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Set up GCC
+      uses: egor-tensin/setup-gcc@v1
+      with:
+        version: 12
+        platform: x64
+
+    - name: Download Depedencies
+      run: sudo apt-get install -y libglu1-mesa-dev freeglut3-dev mesa-common-dev libxmu-dev libxi-dev libgl-dev libx11-dev libxft-dev libxext-dev nasm libwayland-dev libxkbcommon-dev libegl1-mesa-dev libdecor-0-dev libxrandr-dev
+
+    - name: Cache linux vcpkg
+      uses: actions/cache@v3
+      with: 
+          path: ${{github.workspace}}/build/vcpkg_installed
+          key: ${{runner.os}}-vcpkg-${{hashfiles('neo/linux-status')}}
+          restore-keys: |
+            ${{ runner.OS }}-vcpkg-
+
+
+    - name: Configure CMake
+      working-directory: ${{github.workspace}}/neo
+      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
+      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+      run: cmake -B ${{github.workspace}}/build --preset=linux-${{env.BUILD_TYPE}}
+
+    - name: Build
+      # Build your program with the given configuration
+      run: cmake --build ${{github.workspace}}/build --target game
+      
+    - name: Archive production artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: linux-${{env.VERSION}}-${{env.BUILD_TYPE}}
+        path: |
+          ./build/d3xp/gamex86_64.so
+          ./build/vcpkg_installed/x64-linux/share/*/copyright
+          ./COPYING.txt
+          ./README.md
+
+  windows-build:
+    # The CMake configure and build commands are platform agnostic and should work equally
+    # well on Windows or Mac.  You can convert this to a matrix build if you need
+    # cross-platform coverage.
+    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: setup-msbuild
+      uses: microsoft/setup-msbuild@v1.1
+      with:
+        vs-version: '[17.0, 18.0)'
+        msbuild-architecture: x64
+
+    - name: Cache Windows vcpkg
+      uses: actions/cache@v3
+      with: 
+          path: ${{github.workspace}}/build/vcpkg_installed
+          key: ${{runner.os}}-vcpkg-${{hashfiles('neo/windows-status')}}
+          restore-keys: |
+            ${{ runner.OS }}-vcpkg-
+
+    - name: Configure CMake
+      working-directory: ${{github.workspace}}/neo
+      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
+      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+      run: cmake -B ${{github.workspace}}/build --preset=windows-x64-2022
+      
+    - name: Build
+      # Build your program with the given configuration
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target gamex64
+      
+    - name: Archive production artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: windows-${{env.VERSION}}-${{env.BUILD_TYPE}}
+        path: |
+          ./build/d3xp/${{env.BUILD_TYPE}}/gamex64.dll
+          ./build/vcpkg_installed/x64-windows-static-md/share/*/copyright
+          ./COPYING.txt
+          ./README.md
+  
+  windows-32-bit-build:
+    # The CMake configure and build commands are platform agnostic and should work equally
+    # well on Windows or Mac.  You can convert this to a matrix build if you need
+    # cross-platform coverage.
+    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: setup-msbuild
+      uses: microsoft/setup-msbuild@v1.1
+      with:
+        vs-version: '[17.0, 18.0)'
+        msbuild-architecture: Win32
+
+    - name: Cache Windows vcpkg
+      uses: actions/cache@v3
+      with: 
+          path: ${{github.workspace}}/build/vcpkg_installed
+          key: ${{runner.os}}-vcpkg-${{hashfiles('neo/windows-32-bit-status')}}
+          restore-keys: |
+            ${{ runner.OS }}-vcpkg-
+
+    - name: Configure CMake
+      working-directory: ${{github.workspace}}/neo
+      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
+      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+      run: cmake -B ${{github.workspace}}/build --preset=windows-x86-2022
+      
+    - name: Build
+      # Build your program with the given configuration
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target gamex86
+      
+    - name: Archive production artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: windows-32-bit-${{env.VERSION}}-${{env.BUILD_TYPE}}
+        path: |
+          ./build//d3xp/${{env.BUILD_TYPE}}/gamex86.dll
+          ./build/vcpkg_installed/x86-windows-static-md/share/*/copyright
+          ./COPYING.txt
+          ./README.md
+  make-release:
+    needs: [ linux-build, windows-build, windows-32-bit-build ]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Get log messages
+      id: messages
+      run: echo "git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:-%s"
+    - name: Get current date
+      id: date
+      run: echo "::set-output name=date::$(date +'%Y-%m-%d-%H-%M-%s')"
+    - name: Make release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: nightly-${{ steps.date.outputs.date }}
+        release_name: Classic DOOM 3 for DOOM BFA Nigthly ${{ steps.date.outputs.date }}
+        body: |
+          ${{ steps.messages.outputs.messages }}
+        draft: false
+        prerelease: true
+    - name: Download linux artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: linux-${{env.VERSION}}-${{env.BUILD_TYPE}}
+    - name: Zip linux artifact files
+      working-directory: ${{github.workspace}}
+      run: |
+        mv ./build/d3xp/gamex86_64.so gamex86_64.so
+        mkdir ./third-party-licenses
+        mv ./build/vcpkg_installed/x64-linux/share/* ./third-party-licenses
+        rm -d -R ./build
+        zip -m -r linux-${{env.VERSION}}-${{env.BUILD_TYPE}}.zip .
+    - name: Upload Linux Artifact to release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{github.workspace}}/linux-${{env.VERSION}}-${{env.BUILD_TYPE}}.zip
+        asset_name: linux-${{env.VERSION}}-${{env.BUILD_TYPE}}.zip
+        asset_content_type: application/zip
+    - name: Delete linux artifact zip file
+      working-directory: ${{github.workspace}}
+      run: rm linux-${{env.VERSION}}-${{env.BUILD_TYPE}}.zip
+    
+    - name: Download windows artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: windows-${{env.VERSION}}-${{env.BUILD_TYPE}}
+    - name: Zip Windows artifact files
+      working-directory: ${{github.workspace}}
+      run: |
+        mv ./build/d3xp/${{env.BUILD_TYPE}}/* .
+        mkdir ./third-party-licenses
+        mv ./build/vcpkg_installed/x64-windows-static-md/share/* ./third-party-licenses
+        rm -d -rf ./build
+        zip -m -r windows-${{env.VERSION}}-${{env.BUILD_TYPE}}.zip .
+    - name: Upload Windows Artifact to release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{github.workspace}}/windows-${{env.VERSION}}-${{env.BUILD_TYPE}}.zip
+        asset_name: windows-${{env.VERSION}}-${{env.BUILD_TYPE}}.zip
+        asset_content_type: application/zip
+    - name: Delete Windows artifact zip file
+      working-directory: ${{github.workspace}}
+      run: rm windows-${{env.VERSION}}-${{env.BUILD_TYPE}}.zip
+   
+    - name: Download windows 32 bit artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: windows-32-bit-${{env.VERSION}}-${{env.BUILD_TYPE}}
+    - name: Zip Windows 32 bit artifact files
+      working-directory: ${{github.workspace}}
+      run: |
+        mv ./build/d3xp/${{env.BUILD_TYPE}}/* .
+        mkdir ./third-party-licenses
+        mv ./build/vcpkg_installed/x86-windows-static-md/share/* ./third-party-licenses
+        rm -d -rf ./build
+        zip -m -r windows-32-bit-${{env.VERSION}}-${{env.BUILD_TYPE}}.zip .
+    - name: Upload Windows 32 bit Artifact to release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{github.workspace}}/windows-32-bit-${{env.VERSION}}-${{env.BUILD_TYPE}}.zip
+        asset_name: windows-32-bit-${{env.VERSION}}-${{env.BUILD_TYPE}}.zip
+        asset_content_type: application/zip
